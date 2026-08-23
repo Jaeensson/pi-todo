@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { applyOp, EMPTY_STATE } from "../src/core.js";
+import { formatList, formatTaskLine, MARKER_PENDING, MARKER_ACTIVE, MARKER_DONE, markerFor, type Task } from "../src/core.js";
+import { visibleWidth } from "@earendil-works/pi-tui";
 
 describe("applyOp", () => {
   it("add creates a pending task and increments nextId", () => {
@@ -56,5 +58,55 @@ describe("applyOp", () => {
     const r = applyOp(added.state, "clear", {});
     expect(r.state).toEqual(EMPTY_STATE);
     expect(r.content).toBe("Cleared 1 task");
+  });
+});
+
+function task(id: number, text: string, status: Task["status"]): Task {
+  return { id, text, status, createdAt: 0, updatedAt: 0 };
+}
+
+describe("markers and formatting", () => {
+  it("markerFor maps each status", () => {
+    expect(markerFor("pending")).toBe(MARKER_PENDING);
+    expect(markerFor("in_progress")).toBe(MARKER_ACTIVE);
+    expect(markerFor("completed")).toBe(MARKER_DONE);
+  });
+
+  it("markers are exactly the three spec'd code points", () => {
+    expect(MARKER_PENDING).toBe("\u25CB");
+    expect(MARKER_ACTIVE).toBe("\u25B8");
+    expect(MARKER_DONE).toBe("\u2713");
+  });
+
+  it("each marker occupies exactly one terminal column", () => {
+    expect(visibleWidth(MARKER_PENDING)).toBe(1);
+    expect(visibleWidth(MARKER_ACTIVE)).toBe(1);
+    expect(visibleWidth(MARKER_DONE)).toBe(1);
+  });
+
+  it("formatTaskLine renders marker + id + text", () => {
+    expect(formatTaskLine(task(2, "Wire up token refresh", "in_progress"))).toBe("▸ #2 Wire up token refresh");
+  });
+
+  it("formatList joins lines and handles empty", () => {
+    expect(formatList([])).toBe("No todos.");
+    const tasks = [task(1, "A", "pending"), task(2, "B", "completed")];
+    expect(formatList(tasks)).toBe("○ #1 A\n✓ #2 B");
+  });
+
+  it("all rendered strings are printable ASCII plus the marker set", () => {
+    const ALLOWED = new Set([MARKER_PENDING, MARKER_ACTIVE, MARKER_DONE]);
+    const tasks = [
+      task(1, "A", "pending"),
+      task(2, "B", "in_progress"),
+      task(3, "C", "completed"),
+    ];
+    const outputs = [formatList(tasks), formatTaskLine(task(1, "A", "pending"))].join("\n");
+    for (const ch of outputs) {
+      if (ALLOWED.has(ch)) continue;
+      if (ch === "\n") continue;
+      expect(ch.charCodeAt(0)).toBeGreaterThanOrEqual(0x20);
+      expect(ch.charCodeAt(0)).toBeLessThanOrEqual(0x7e);
+    }
   });
 });

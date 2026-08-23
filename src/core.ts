@@ -90,8 +90,7 @@ export function applyOp(
     }
 
     case "list":
-      // Formatting lands in Task 3; content is filled in there.
-      return ok(current, "");
+      return ok(current, formatList(current.tasks));
 
     case "clear":
       return ok(
@@ -102,4 +101,23 @@ export function applyOp(
     default:
       return err(current, `unknown op: ${op}`);
   }
+}
+
+export const MARKER_PENDING = "\u25CB"; // ○
+export const MARKER_ACTIVE = "\u25B8";  // ▸
+export const MARKER_DONE = "\u2713";    // ✓
+
+export function markerFor(status: TaskStatus): string {
+  if (status === "completed") return MARKER_DONE;
+  if (status === "in_progress") return MARKER_ACTIVE;
+  return MARKER_PENDING;
+}
+
+export function formatTaskLine(t: Task): string {
+  return `${markerFor(t.status)} #${t.id} ${t.text}`;
+}
+
+export function formatList(tasks: Task[]): string {
+  if (tasks.length === 0) return "No todos.";
+  return tasks.map(formatTaskLine).join("\n");
 }
