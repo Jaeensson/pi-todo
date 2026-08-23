@@ -82,7 +82,7 @@ describe("store", () => {
   it("every save is atomic — no temp files remain", () => {
     const path = storePathFor(dir);
     for (let i = 0; i < 5; i++) applyAndSave(path, EMPTY_STATE, "add", { text: `t${i}` });
-    const leftovers = readdirSync(dir).filter((f) => f.includes(".tmp-"));
+    const leftovers = readdirSync(join(dir, ".pi")).filter((f) => f.includes(".tmp-"));
     expect(leftovers).toEqual([]);
   });
 });
