@@ -144,7 +144,7 @@ Visibility flag is per-session, defaults ON.
     · `✓` completed (`theme.fg("dim")`)
   - ordering: pending → in_progress → completed (stable by id within status)
   - header: `Todos <n>/<total>` + `(<k> in progress)` when k > 0; colored via theme
-  - cap: max 10 lines (header + 9), overflow → `+N more`
+  - cap: 10 lines total incl. header and the `+N more` overflow line (N = hidden tasks)
 - Unregistered on `session_shutdown`; refreshed on tool mutation and `turn_end`.
 
 ## 9. Events
