@@ -7,7 +7,7 @@
 ## 1. Goal
 
 The user follows long-running tasks poorly without a visible task list. pi-todo gives them a
-**persistent, per-project todo list** with a **toggleable, always-anchored, ASCII-only TUI widget**
+**persistent, per-project todo list** with a **toggleable, always-anchored, emoji-free TUI widget**
 above the editor, managed by a minimal `todo` tool the model can call, and compliant with the
 Superpowers skill system's task-tracking expectations.
 
@@ -45,7 +45,7 @@ whose actions cover create / list / mark-complete / track-progress. No adapter o
 | D2 | Widget anchoring | **Anchored to a fixed layout region** — `aboveEditor`; conversation scrolls independently; standard widget semantics (auto-hide when empty) |
 | D3 | Task lifecycle | **3 states:** `pending → in_progress → completed` |
 | D4 | Tool surface | **Approach A:** single `todo` tool with `op` discriminator: `add \| start \| done \| list \| clear` |
-| D5 | Glyphs | **ASCII only** — no emojis, no box-drawing/Unicode glyphs. Enforced by test |
+| D5 | Glyphs | **No emojis; Unicode symbol markers allowed.** Marker set: `○` pending (U+25CB) · `▸` in_progress (U+25B8) · `✓` completed (U+2713) — all zero emoji-presentation risk. No box-drawing. All non-ASCII output is restricted to the marker set; enforced by test |
 | D6 | Dev location | `~/pi-todo` (git repo). Deployed via symlink `~/.pi/agent/extensions/pi-todo → ~/pi-todo` (auto-discovery + `/reload`) |
 | D7 | Single-active invariant | `start` pauses any other `in_progress` item (exactly one active at a time) |
 | D8 | Toggle | `/todos` toggles widget visibility; `/todos clear` clears (with `ui.confirm`) |
@@ -58,7 +58,7 @@ whose actions cover create / list / mark-complete / track-progress. No adapter o
 ├── index.ts                  # pi entry (auto-discovered via symlink as extensions/pi-todo/index.ts)
 ├── package.json              # private; "typebox" dep; devDeps: vitest, typescript
 ├── src/
-│   ├── core.ts               # PURE logic — types, reducer, formatting, ASCII glyphs (no pi imports)
+│   ├── core.ts               # PURE logic — types, reducer, formatting, marker glyphs (no pi imports)
 │   ├── store.ts              # JSON persistence — load / atomic save / path resolution (no pi imports)
 │   └── widget.ts             # widget controller — register-once + requestRender (pi imports only in types)
 ├── test/
@@ -107,7 +107,7 @@ File: `<cwd>/.pi/todo.json`
 | `add` | `text` | create task, status `pending` |
 | `start` | `id` | set `in_progress`; other `in_progress` items revert to `pending` (single-active, D7) |
 | `done` | `id` | set `completed` |
-| `list` | — | ASCII list, all tasks, same `[ ]`/`[>]`/`[x]` markers + `#id` as the widget (§8) |
+| `list` | — | list, all tasks, same `○`/`▸`/`✓` markers + `#id` as the widget (§8) |
 | `clear` | — | empty the list |
 
 - Non-existent `id` → `"Error: no task with id N"` (isError result).
@@ -116,7 +116,7 @@ File: `<cwd>/.pi/todo.json`
 - `promptSnippet` / `promptGuidelines`: "use for multi-step work / plan tasks / checklist items;
   `start` before beginning work; `done` immediately when finished; one task in_progress at a time" —
   this is the Superpowers-alignment surface.
-- `renderCall` / `renderResult`: compact ASCII, e.g. `todo + Refactor auth` / `[x] #1 Refactor auth`.
+- `renderCall` / `renderResult`: compact text, e.g. `todo + Refactor auth` / `✓ #1 Refactor auth`.
 
 ## 7. Commands
 
@@ -133,15 +133,15 @@ Visibility flag is per-session, defaults ON.
   keep captured `tui` for `requestRender()`; re-register when the UI context identity changes
   (the pattern used by all seven researched implementations).
 - **Renders iff:** toggle ON **and** `tasks.length > 0`. (Standard anchored semantics, D2.)
-- **Layout (ASCII only, D5):**
+- **Layout (no emojis; marker set only, D5):**
   ```
   Todos 2/5  (1 in progress)
-  [ ] 1 Refactor auth
-  [>] 2 Wire up token refresh
-  [x] 3 Port landing.html
+  ○ 1 Refactor auth
+  ▸ 2 Wire up token refresh
+  ✓ 3 Port landing.html
   ```
-  - markers: `[ ]` pending (default text color) · `[>]` in_progress (`theme.fg("accent")`)
-    · `[x]` completed (`theme.fg("dim")`)
+  - markers: `○` pending (default text color) · `▸` in_progress (`theme.fg("accent")`)
+    · `✓` completed (`theme.fg("dim")`)
   - ordering: pending → in_progress → completed (stable by id within status)
   - header: `Todos <n>/<total>` + `(<k> in progress)` when k > 0; colored via theme
   - cap: max 10 lines (header + 9), overflow → `+N more`
@@ -161,8 +161,9 @@ No reminders, no `context`-hook injection (D9).
 ## 10. Testing (TDD)
 
 - **core.test.ts:** reducer transitions (all valid/invalid), id sequencing, single-active invariant,
-  `clear`, error paths, and a **ASCII-only invariant** — every rendered string must contain only
-  printable ASCII (`/^[ -~\\t\\n]*$/`) — mechanically enforcing D5.
+  `clear`, error paths, and a **marker-set invariant** — every rendered string must be printable
+  ASCII plus the defined marker set (`○ ▸ ✓`) — mechanically enforcing D5, plus a single-column
+  width assertion per marker (via pi-tui `visibleWidth`).
 - **store.test.ts:** round-trip; missing file → empty; corrupt JSON → empty + warn; atomic save leaves
   no `*.tmp*`; scratch-dir tests (no touching real `.pi/todo.json`).
 - **widget.test.ts:** visibility rules (toggle/empty), line cap + overflow, ordering.
@@ -184,7 +185,8 @@ keybindings · markdown-as-store · auto-clear.
 
 ## 13. Success criteria
 
-1. Widget shows per-project tasks anchored above the editor; `/todos` toggles it; ASCII only.
+1. Widget shows per-project tasks anchored above the editor; `/todos` toggles it; no emojis
+   (markers `○ ▸ ✓`).
 2. Tasks persist across pi restarts in `.pi/todo.json`; corrupt/missing files never crash pi.
 3. Model successfully plans/executes a Superpowers plan workflow (executing-plans) using the
    `todo` tool for add/start/done/list.
