@@ -13,10 +13,13 @@ A human-facing, per-project todo tracker for the pi coding agent.
 ## Install
 
 ```bash
-ln -sfn ~/pi-todo ~/.pi/agent/extensions/pi-todo
+pi install git:git@github.com:Jaeensson/pi-todo
 ```
 
-Then restart pi or run `/reload`.
+Then restart pi or run `/reload`. (HTTPS alternative: `git:github.com/Jaeensson/pi-todo`)
+
+The `todo` tool is auto-discovered by the Superpowers pi mapping, so plan/checklist
+skills drive it with `add` / `start` / `done` / `list`.
 
 ## Develop
 
@@ -26,7 +29,3 @@ npm install
 npm test         # vitest
 npm run typecheck
 ```
-
-Superpowers note: the Superpowers pi extension maps "create a todo / mark complete"
-to any installed todo tool — this extension is that tool, so plan/checklist skills
-drive it with `add` / `start` / `done` / `list`.
