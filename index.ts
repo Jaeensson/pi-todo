@@ -57,9 +57,10 @@ export default function (pi: ExtensionAPI): void {
       const r: TodoResult = applyAndSave(path, state, p.op, { text: p.text, id: p.id });
       state = r.state;
       widget?.setState(state);
+      // pi derives isError only from thrown exceptions — validation failures throw.
+      if (r.error) throw new Error(r.error);
       return {
-        content: [{ type: "text", text: r.error ? `Error: ${r.error}` : r.content }],
-        isError: !!r.error,
+        content: [{ type: "text", text: r.content }],
         details: { op: p.op, params: { text: p.text, id: p.id }, state: r.state },
       };
     },
