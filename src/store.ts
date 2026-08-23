@@ -14,7 +14,7 @@ import {
 } from "node:fs";
 import { dirname, join } from "node:path";
 
-import { applyOp, EMPTY_STATE, type Task, type TodoOp, type TodoResult, type TodoState } from "./core.js";
+import { applyOp, type Task, type TodoOp, type TodoResult, type TodoState } from "./core.js";
 
 interface TodoFile {
   version: number;
@@ -91,6 +91,7 @@ export function applyAndSave(
   params: { text?: string; id?: number },
 ): TodoResult {
   const result = applyOp(current, op, params);
-  if (!result.error) saveState(path, result.state);
+  // "list" is read-only — skip rewriting identical bytes (tmp+fsync+rename).
+  if (!result.error && op !== "list") saveState(path, result.state);
   return result;
 }

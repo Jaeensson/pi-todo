@@ -1,4 +1,4 @@
-import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -31,6 +31,13 @@ describe("store", () => {
     const loaded = loadState(path);
     expect(loaded.tasks).toEqual(r.state.tasks);
     expect(loaded.nextId).toBe(r.state.nextId);
+  });
+
+  it("applyAndSave does not write for the read-only list op", () => {
+    const path = storePathFor(dir);
+    const r = applyAndSave(path, EMPTY_STATE, "list", {});
+    expect(r.error).toBeUndefined();
+    expect(existsSync(path)).toBe(false);
   });
 
   it("applyAndSave does not write on error", () => {

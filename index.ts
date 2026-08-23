@@ -19,6 +19,19 @@ import { markerFor, type TodoOp, type TodoResult, type TodoState } from "./src/c
 import { applyAndSave, loadState, storePathFor } from "./src/store.js";
 import { TodoWidget, type TodoTheme, type TodoUI } from "./src/widget.js";
 
+/** Extract the plain text of a result's first content part (text-part array or bare string). */
+function firstResultText(content: unknown): string | undefined {
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    for (const part of content) {
+      if (typeof part !== "object" || part === null) continue;
+      const p = part as Record<string, unknown>;
+      if (p.type === "text" && typeof p.text === "string") return p.text;
+    }
+  }
+  return undefined;
+}
+
 let state: TodoState = { tasks: [], nextId: 1 };
 let todoPath = storePathFor(process.cwd());
 let widget: TodoWidget | undefined;
@@ -73,10 +86,16 @@ export default function (pi: ExtensionAPI): void {
       return new Text(`${theme.fg("toolTitle", "todo")} ${(args as { op?: string }).op ?? "?"}${target}`, 0, 0);
     },
 
-    renderResult(result: { details?: unknown }, _opts: unknown, theme: TodoTheme) {
+    renderResult(result: { details?: unknown; content?: unknown }, _opts: unknown, theme: TodoTheme) {
+      // When the todo tool throws (validation failure), pi synthesizes the result with
+      // details:{} and no state — fall back to the result text so the error stays visible.
       const details = result.details as { op?: TodoOp; state?: TodoState; params?: { id?: number } } | undefined;
       const state = details?.state;
-      if (!state) return new Text(theme.fg("muted", "todo"), 0, 0);
+      if (!state) {
+        const firstText = firstResultText(result.content);
+        if (firstText) return new Text(theme.fg("error", firstText), 0, 0);
+        return new Text(theme.fg("muted", "todo"), 0, 0);
+      }
       const tasks = state.tasks;
       let line: string | undefined;
       if (details?.op === "add" && tasks.length > 0) {
