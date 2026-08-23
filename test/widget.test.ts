@@ -1,0 +1,117 @@
+import { describe, expect, it } from "vitest";
+import { EMPTY_STATE, type Task, type TodoState } from "../src/core.js";
+import { TodoWidget, renderWidgetLines, WIDGET_KEY, WIDGET_MAX_LINES, type TodoTheme, type TodoUI, type WidgetHandle } from "../src/widget.js";
+
+function task(id: number, text: string, status: Task["status"]): Task {
+  return { id, text, status, createdAt: 0, updatedAt: 0 };
+}
+
+const fakeTheme: TodoTheme = {
+  fg: (color: string, text: string) => `<${color}>${text}</${color}>`,
+};
+
+const EMPTY_THEME = { fg: (c: string, s: string) => s };
+
+function recordingUI(): TodoUI & { calls: Array<[string, unknown, unknown?]> } {
+  const calls: Array<[string, unknown, unknown?]> = [];
+  return {
+    calls,
+    setWidget(key, content, options) {
+      calls.push(options === undefined ? [key, content] : [key, content, options]);
+    },
+  };
+}
+
+describe("renderWidgetLines", () => {
+  it("colorizes markers and header per spec", () => {
+    const state: TodoState = {
+      tasks: [task(1, "A", "in_progress"), task(2, "B", "completed"), task(3, "C", "pending")],
+      nextId: 4,
+    };
+    const lines = renderWidgetLines(state, fakeTheme);
+    expect(lines).toEqual([
+      "<accent>Todos 1/3  (1 in progress)</accent>",
+      "○ #3 C",
+      "<accent>▸</accent> #1 A",
+      "<dim>✓</dim> #2 B",
+    ]);
+  });
+
+  it("honors maxLines and reports overflow with +N more", () => {
+    const state: TodoState = {
+      tasks: Array.from({ length: 12 }, (_, i) => task(i + 1, `t${i + 1}`, "pending")),
+      nextId: 13,
+    };
+    const lines = renderWidgetLines(state, EMPTY_THEME, 10);
+    expect(lines.length).toBe(10);
+    expect(lines[9]).toBe("+4 more");
+  });
+});
+
+describe("TodoWidget", () => {
+  it("registers once and re-renders via requestRender", () => {
+    const ui = recordingUI();
+    const w = new TodoWidget();
+    w.attach(ui);
+    w.setState({ tasks: [task(1, "A", "pending")], nextId: 2 });
+
+    expect(ui.calls).toHaveLength(1);
+    expect(ui.calls[0]?.[0]).toBe(WIDGET_KEY);
+    let renderedCount = 0;
+    const handle: WidgetHandle = { requestRender: () => { renderedCount++; } };
+    const factory = ui.calls[0]?.[1] as (handle: WidgetHandle, theme: TodoTheme) => { render(): string[] };
+    const component = factory(handle, EMPTY_THEME);
+    expect(component.render()[0]).toBe("Todos 0/1");
+
+    w.setState({ tasks: [task(1, "A", "completed")], nextId: 2 });
+    expect(renderedCount).toBe(1);
+  });
+
+  it("hides when empty", () => {
+    const ui = recordingUI();
+    const w = new TodoWidget();
+    w.attach(ui);
+    w.setState({ tasks: [task(1, "A", "pending")], nextId: 2 });
+    w.setState(EMPTY_STATE);
+    expect(ui.calls[ui.calls.length - 1]).toEqual([WIDGET_KEY, undefined]);
+  });
+
+  it("hides when toggled off, shows again when toggled on", () => {
+    const ui = recordingUI();
+    const w = new TodoWidget();
+    w.attach(ui);
+    w.setState({ tasks: [task(1, "A", "pending")], nextId: 2 });
+    expect(w.isVisible()).toBe(true);
+
+    w.setVisible(false);
+    expect(w.isVisible()).toBe(false);
+    expect(ui.calls[ui.calls.length - 1]).toEqual([WIDGET_KEY, undefined]);
+
+    w.setVisible(true);
+    expect(w.isVisible()).toBe(true);
+    expect(ui.calls[ui.calls.length - 1]?.[0]).toBe(WIDGET_KEY);
+    expect(ui.calls[ui.calls.length - 1]?.[1]).not.toBeUndefined();
+  });
+
+  it("re-registers when a new UI context is attached", () => {
+    const ui1 = recordingUI();
+    const ui2 = recordingUI();
+    const w = new TodoWidget();
+    w.attach(ui1);
+    w.setState({ tasks: [task(1, "A", "pending")], nextId: 2 });
+    expect(ui1.calls).toHaveLength(1);
+
+    w.attach(ui2);
+    w.refresh();
+    expect(ui2.calls).toHaveLength(1); // re-registered under the fresh context
+  });
+
+  it("dispose unregisters the widget", () => {
+    const ui = recordingUI();
+    const w = new TodoWidget();
+    w.attach(ui);
+    w.setState({ tasks: [task(1, "A", "pending")], nextId: 2 });
+    w.dispose();
+    expect(ui.calls[ui.calls.length - 1]).toEqual([WIDGET_KEY, undefined]);
+  });
+});
