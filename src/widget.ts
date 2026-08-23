@@ -39,7 +39,7 @@ export function renderWidgetLines(state: TodoState, theme: TodoTheme, maxLines: 
   const visible = sorted.slice(0, budget);
   const hidden = sorted.length - visible.length;
   for (const t of visible) lines.push(`${colorMarker(t, theme)} #${t.id} ${t.text}`);
-  if (hidden > 0) lines.push(`+${hidden} more`);
+  if (hidden > 0 && lines.length < maxLines) lines.push(`+${hidden} more`);
   return lines;
 }
 

@@ -42,9 +42,19 @@ describe("renderWidgetLines", () => {
       tasks: Array.from({ length: 12 }, (_, i) => task(i + 1, `t${i + 1}`, "pending")),
       nextId: 13,
     };
-    const lines = renderWidgetLines(state, EMPTY_THEME, 10);
+    const lines = renderWidgetLines(state, EMPTY_THEME, WIDGET_MAX_LINES);
     expect(lines.length).toBe(10);
     expect(lines[9]).toBe("+4 more");
+  });
+
+  it("stays within one line when maxLines=1 (drops +N more)", () => {
+    const state: TodoState = {
+      tasks: [task(1, "A", "pending")],
+      nextId: 2,
+    };
+    const lines = renderWidgetLines(state, EMPTY_THEME, 1);
+    expect(lines.length).toBe(1);
+    expect(lines[0]).toBe("Todos 0/1");
   });
 });
 
