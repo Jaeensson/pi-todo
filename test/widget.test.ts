@@ -31,9 +31,9 @@ describe("renderWidgetLines", () => {
     const lines = renderWidgetLines(state, fakeTheme);
     expect(lines).toEqual([
       "<accent>Todos 1/3  (1 in progress)</accent>",
-      "○ #3 C",
       "<accent>▸</accent> #1 A",
       "<dim>✓</dim> #2 B",
+      "○ #3 C",
     ]);
   });
 

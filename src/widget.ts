@@ -35,18 +35,12 @@ export function renderWidgetLines(state: TodoState, theme: TodoTheme, maxLines: 
   // Reserve one line for the header and one for the "+N more" overflow indicator so the
   // whole widget stays within maxLines (bounded render); N counts tasks not shown.
   const budget = Math.max(0, maxLines - 2);
-  const sorted = [...state.tasks].sort(byStatusThenId);
-  const visible = sorted.slice(0, budget);
-  const hidden = sorted.length - visible.length;
+  const ordered = [...state.tasks].sort((a, b) => a.id - b.id);
+  const visible = ordered.slice(0, budget);
+  const hidden = ordered.length - visible.length;
   for (const t of visible) lines.push(`${colorMarker(t, theme)} #${t.id} ${t.text}`);
   if (hidden > 0 && lines.length < maxLines) lines.push(`+${hidden} more`);
   return lines;
-}
-
-const STATUS_ORDER: Record<Task["status"], number> = { pending: 0, in_progress: 1, completed: 2 };
-
-function byStatusThenId(a: Task, b: Task): number {
-  return STATUS_ORDER[a.status] - STATUS_ORDER[b.status] || a.id - b.id;
 }
 
 interface RegisteredComponent {
