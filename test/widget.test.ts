@@ -58,7 +58,7 @@ describe("renderWidgetLines", () => {
     expect(lines[0]).toBe("Todos 0/1");
   });
 
-  it("pins the most recently completed task to the top on overflow", () => {
+  it("pins the most recently completed task even when it falls inside the natural window", () => {
     const tasks = Array.from({ length: 12 }, (_, i) => task(i + 1, `t${i + 1}`, "pending"));
     tasks[3] = { ...tasks[3]!, status: "completed", updatedAt: 100 }; // #4 completed
     const state: TodoState = { tasks, nextId: 13 };
