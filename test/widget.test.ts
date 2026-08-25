@@ -56,6 +56,48 @@ describe("renderWidgetLines", () => {
     expect(lines.length).toBe(1);
     expect(lines[0]).toBe("Todos 0/1");
   });
+
+  it("pins the most recently completed task to the top on overflow", () => {
+    const tasks = Array.from({ length: 12 }, (_, i) => task(i + 1, `t${i + 1}`, "pending"));
+    tasks[3] = { ...tasks[3]!, status: "completed", updatedAt: 100 }; // #4 completed
+    const state: TodoState = { tasks, nextId: 13 };
+    const lines = renderWidgetLines(state, EMPTY_THEME, WIDGET_MAX_LINES);
+    expect(lines.length).toBe(10);
+    expect(lines[1]).toBe("✓ #4 t4");
+    expect(lines[2]).toBe("○ #5 t5");
+    expect(lines[9]).toBe("+4 more"); // #1-#3 hidden above pin, #12 hidden below
+  });
+
+  it("pins the latest of several completions by updatedAt", () => {
+    const tasks = Array.from({ length: 12 }, (_, i) => task(i + 1, `t${i + 1}`, "pending"));
+    tasks[2] = { ...tasks[2]!, status: "completed", updatedAt: 100 };  // #3
+    tasks[7] = { ...tasks[7]!, status: "completed", updatedAt: 200 };  // #8 — more recent
+    const state: TodoState = { tasks, nextId: 13 };
+    const lines = renderWidgetLines(state, EMPTY_THEME, WIDGET_MAX_LINES);
+    expect(lines[1]).toBe("✓ #8 t8");
+  });
+
+  it("breaks updatedAt ties by higher id", () => {
+    const tasks = Array.from({ length: 12 }, (_, i) => task(i + 1, `t${i + 1}`, "pending"));
+    tasks[2] = { ...tasks[2]!, status: "completed" }; // #3, updatedAt 0
+    tasks[7] = { ...tasks[7]!, status: "completed" }; // #8, updatedAt 0
+    const state: TodoState = { tasks, nextId: 13 };
+    const lines = renderWidgetLines(state, EMPTY_THEME, WIDGET_MAX_LINES);
+    expect(lines[1]).toBe("✓ #8 t8");
+  });
+
+  it("counts hidden-above-pin tasks in +N more when the pin sits near the end", () => {
+    const tasks = Array.from({ length: 12 }, (_, i) => task(i + 1, `t${i + 1}`, "pending"));
+    tasks[10] = { ...tasks[10]!, status: "completed", updatedAt: 100 }; // #11
+    const state: TodoState = { tasks, nextId: 13 };
+    const lines = renderWidgetLines(state, EMPTY_THEME, WIDGET_MAX_LINES);
+    expect(lines).toEqual([
+      "Todos 1/12",
+      "✓ #11 t11",
+      "○ #12 t12",
+      "+10 more",
+    ]);
+  });
 });
 
 describe("TodoWidget", () => {

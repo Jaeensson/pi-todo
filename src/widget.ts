@@ -25,6 +25,23 @@ function colorMarker(t: Task, theme: TodoTheme): string {
   return marker;
 }
 
+// Index of the window's first line: 0, or — when the list overflows — the index of the
+// most recently completed task (max updatedAt, tie-broken by higher id, since ids are
+// assigned in completion order). Returns 0 when nothing is completed or nothing overflows.
+function startIndex(ordered: Task[], budget: number): number {
+  if (ordered.length <= budget) return 0;
+  let pin = -1;
+  for (let i = 0; i < ordered.length; i++) {
+    const t = ordered[i]!;
+    if (t.status !== "completed") continue;
+    const p = pin === -1 ? undefined : ordered[pin];
+    if (p === undefined || t.updatedAt > p.updatedAt || (t.updatedAt === p.updatedAt && t.id > p.id)) {
+      pin = i;
+    }
+  }
+  return pin === -1 ? 0 : pin;
+}
+
 export function renderWidgetLines(state: TodoState, theme: TodoTheme, maxLines: number = WIDGET_MAX_LINES): string[] {
   const done = state.tasks.filter((t) => t.status === "completed").length;
   const active = state.tasks.filter((t) => t.status === "in_progress").length;
@@ -36,7 +53,8 @@ export function renderWidgetLines(state: TodoState, theme: TodoTheme, maxLines: 
   // whole widget stays within maxLines (bounded render); N counts tasks not shown.
   const budget = Math.max(0, maxLines - 2);
   const ordered = [...state.tasks].sort((a, b) => a.id - b.id);
-  const visible = ordered.slice(0, budget);
+  const start = startIndex(ordered, budget);
+  const visible = ordered.slice(start, start + budget);
   const hidden = ordered.length - visible.length;
   for (const t of visible) lines.push(`${colorMarker(t, theme)} #${t.id} ${t.text}`);
   if (hidden > 0 && lines.length < maxLines) lines.push(`+${hidden} more`);
