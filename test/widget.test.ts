@@ -44,6 +44,7 @@ describe("renderWidgetLines", () => {
     };
     const lines = renderWidgetLines(state, EMPTY_THEME, WIDGET_MAX_LINES);
     expect(lines.length).toBe(10);
+    expect(lines[1]).toBe("○ #1 t1");
     expect(lines[9]).toBe("+4 more");
   });
 
