@@ -1,7 +1,8 @@
 /**
- * pi-todo — a human-facing, per-project todo tracker for the pi coding agent.
+ * pi-todo — a human-facing, per-session todo tracker for the pi coding agent.
  *
- * - `todo` tool: add | start | done | list | clear (persists to .pi/todo.json)
+ * - `todo` tool: add | start | done | list | clear (persists per session, beside
+ *   the session file under ~/.pi/agent/sessions; ephemeral sessions stay in memory)
  * - `/todos`: toggle the widget · `/todos clear`: clear with confirmation
  * - Anchored aboveEditor widget (ASCII-safe markers: ○ ▸ ✓)
  *
@@ -16,7 +17,7 @@ import { Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 
 import { markerFor, type TodoOp, type TodoResult, type TodoState } from "./src/core.js";
-import { applyAndSave, loadState, storePathFor } from "./src/store.js";
+import { applyAndSave, inheritOnFork, loadSessionState, sessionTodoPath } from "./src/store.js";
 import { TodoWidget, type TodoTheme, type TodoUI } from "./src/widget.js";
 
 /** Extract the plain text of a result's first content part (text-part array or bare string). */
@@ -32,8 +33,13 @@ function firstResultText(content: unknown): string | undefined {
   return undefined;
 }
 
-let state: TodoState = { tasks: [], nextId: 1 };
-let todoPath = storePathFor(process.cwd());
+/** Storage path for the current session, or undefined when the session is
+ *  ephemeral (no session file) — todos then stay in memory. */
+function sessionStorePath(ctx: ExtensionContext): string | undefined {
+  const file = ctx.sessionManager.getSessionFile();
+  return file === undefined ? undefined : sessionTodoPath(file);
+}
+
 let widget: TodoWidget | undefined;
 
 export default function (pi: ExtensionAPI): void {
@@ -43,9 +49,11 @@ export default function (pi: ExtensionAPI): void {
     name: "todo",
     label: "Todo",
     description:
-      "Manage the persistent per-project todo list (.pi/todo.json). " +
-      "Ops: add (new task, requires text), start (mark in_progress — only one task is " +
-      "in_progress at a time), done (mark completed), list (show all), clear (delete all). " +
+      "Manage the persistent per-session todo list. Each pi session has its own " +
+      "list, stored beside the session file; resuming a session restores its todos " +
+      "and other sessions are unaffected. Ops: add (new task, requires text), start " +
+      "(mark in_progress — only one task is in_progress at a time), done (mark " +
+      "completed), list (show all), clear (delete all). " +
       "Use for multi-step work: create one todo per step or plan task, start before " +
       "beginning work, done immediately when finished.",
     promptSnippet: "Track multi-step work in a todo list",
@@ -64,12 +72,9 @@ export default function (pi: ExtensionAPI): void {
 
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
       const p = params as { op: TodoOp; text?: string; id?: number };
-      const path = storePathFor(ctx.cwd);
-      state = loadState(path);
-      todoPath = path;
-      const r: TodoResult = applyAndSave(path, state, p.op, { text: p.text, id: p.id });
-      state = r.state;
-      widget?.setState(state);
+      const path = sessionStorePath(ctx);
+      const r: TodoResult = applyAndSave(path, loadSessionState(path), p.op, { text: p.text, id: p.id });
+      widget?.setState(r.state);
       // pi derives isError only from thrown exceptions — validation failures throw.
       if (r.error) throw new Error(r.error);
       return {
@@ -116,17 +121,14 @@ export default function (pi: ExtensionAPI): void {
     handler: async (args, ctx) => {
       const arg = args.trim();
       if (arg === "clear") {
-        const ok = await ctx.ui.confirm("Clear all todos?", "This removes every task from .pi/todo.json");
+        const ok = await ctx.ui.confirm("Clear all todos?", "Removes every task from this session");
         if (!ok) {
           ctx.ui.notify("Cancelled", "info");
           return;
         }
-        const path = storePathFor(ctx.cwd);
-        state = loadState(path);
-        todoPath = path;
-        const r = applyAndSave(path, state, "clear", {});
-        state = r.state;
-        widget?.setState(state);
+        const path = sessionStorePath(ctx);
+        const r = applyAndSave(path, loadSessionState(path), "clear", {});
+        widget?.setState(r.state);
         ctx.ui.notify(r.content, "info");
         return;
       }
@@ -139,9 +141,15 @@ export default function (pi: ExtensionAPI): void {
 
   // ---- events -------------------------------------------------------------
 
-  pi.on("session_start", async (_event, ctx: ExtensionContext) => {
-    todoPath = storePathFor(ctx.cwd);
-    state = loadState(todoPath);
+  pi.on("session_start", async (event, ctx: ExtensionContext) => {
+    const file = ctx.sessionManager.getSessionFile();
+    // Fork/clone mint a new session id — inherit the source session's todos
+    // (only when the destination has none yet; never overwrite).
+    if (event.reason === "fork" && file !== undefined) {
+      inheritOnFork(event.previousSessionFile, file);
+    }
+    const path = file === undefined ? undefined : sessionTodoPath(file);
+    const state = loadSessionState(path);
     if (ctx.hasUI) {
       widget ??= new TodoWidget();
       widget.attach(ctx.ui as unknown as TodoUI);
