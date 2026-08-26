@@ -32,9 +32,19 @@ function empty(): TodoState {
   return { tasks: [], nextId: 1 };
 }
 
-/** Load a session's todos: undefined file (ephemeral session) → empty, in-memory. */
+let memoryState: TodoState | undefined;
+
+/** Load a session's todos: undefined file (ephemeral session) → in-memory state
+ *  retained across calls (reset via resetMemoryState at session boundaries);
+ *  otherwise read the session's file. */
 export function loadSessionState(file: string | undefined): TodoState {
-  return file === undefined ? empty() : loadState(file);
+  return file === undefined ? (memoryState ?? empty()) : loadState(file);
+}
+
+/** Forget in-memory (ephemeral) todo state — called at session boundaries so
+ *  state never leaks across sessions. */
+export function resetMemoryState(): void {
+  memoryState = undefined;
 }
 
 function normalizeStatus(s: unknown): Task["status"] {
@@ -98,9 +108,13 @@ export function applyAndSave(
   params: { text?: string; id?: number },
 ): TodoResult {
   const result = applyOp(current, op, params);
+  if (path === undefined) {
+    // Ephemeral session: retain in memory for subsequent calls this session.
+    memoryState = result.state;
+    return result;
+  }
   // "list" is read-only — skip rewriting identical bytes (tmp+fsync+rename).
-  // An undefined path means an ephemeral session — apply in memory, never write.
-  if (!result.error && op !== "list" && path !== undefined) saveState(path, result.state);
+  if (!result.error && op !== "list") saveState(path, result.state);
   return result;
 }
 

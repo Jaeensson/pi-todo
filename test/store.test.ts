@@ -9,6 +9,7 @@ import {
   inheritOnFork,
   loadSessionState,
   loadState,
+  resetMemoryState,
   sessionTodoPath,
 } from "../src/store.js";
 
@@ -17,6 +18,7 @@ let sessionFile: string; // fake <timestamp>_<uuid>.jsonl
 let todoFile: string;    // its sibling .todo.json
 
 beforeEach(() => {
+  resetMemoryState();
   dir = mkdtempSync(join(tmpdir(), "pi-todo-"));
   sessionFile = join(dir, "2026-08-26T08-00-00-000Z_01a0deadbeef.jsonl");
   todoFile = join(dir, "2026-08-26T08-00-00-000Z_01a0deadbeef.todo.json");
@@ -60,6 +62,25 @@ describe("store", () => {
     expect(r.error).toBeUndefined();
     expect(r.state.tasks).toHaveLength(1);
     expect(readdirSync(dir)).toEqual([]);
+  });
+
+  it("loadSessionState(undefined) retains in-memory state across calls until reset", () => {
+    let current = loadSessionState(undefined);
+    let r = applyAndSave(undefined, current, "add", { text: "A" });
+    expect(r.state.tasks).toHaveLength(1);
+    current = loadSessionState(undefined); // next tool call
+    expect(current.tasks).toHaveLength(1);
+    r = applyAndSave(undefined, current, "done", { id: 1 });
+    expect(r.state.tasks[0]?.status).toBe("completed");
+    expect(loadSessionState(undefined).tasks[0]?.status).toBe("completed");
+    expect(readdirSync(dir)).toEqual([]); // still nothing on disk
+  });
+
+  it("resetMemoryState clears in-memory state at session boundaries", () => {
+    applyAndSave(undefined, EMPTY_STATE, "add", { text: "A" });
+    expect(loadSessionState(undefined).tasks).toHaveLength(1);
+    resetMemoryState();
+    expect(loadSessionState(undefined)).toEqual(EMPTY_STATE);
   });
 
   it("applyAndSave does not write for the read-only list op", () => {

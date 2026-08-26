@@ -17,7 +17,7 @@ import { Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 
 import { markerFor, type TodoOp, type TodoResult, type TodoState } from "./src/core.js";
-import { applyAndSave, inheritOnFork, loadSessionState, sessionTodoPath } from "./src/store.js";
+import { applyAndSave, inheritOnFork, loadSessionState, resetMemoryState, sessionTodoPath } from "./src/store.js";
 import { TodoWidget, type TodoTheme, type TodoUI } from "./src/widget.js";
 
 /** Extract the plain text of a result's first content part (text-part array or bare string). */
@@ -142,6 +142,7 @@ export default function (pi: ExtensionAPI): void {
   // ---- events -------------------------------------------------------------
 
   pi.on("session_start", async (event, ctx: ExtensionContext) => {
+    resetMemoryState();
     const file = ctx.sessionManager.getSessionFile();
     // Fork/clone mint a new session id — inherit the source session's todos
     // (only when the destination has none yet; never overwrite).
@@ -163,6 +164,7 @@ export default function (pi: ExtensionAPI): void {
 
   pi.on("session_shutdown", async () => {
     widget?.dispose();
+    resetMemoryState();
     widget = undefined;
   });
 }
