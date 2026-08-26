@@ -12,7 +12,7 @@ import {
   unlinkSync,
   writeFileSync,
 } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname } from "node:path";
 
 import { applyOp, type Task, type TodoOp, type TodoResult, type TodoState } from "./core.js";
 
@@ -22,12 +22,29 @@ interface TodoFile {
   tasks: Task[];
 }
 
-export function storePathFor(cwd: string): string {
-  return join(cwd, ".pi", "todo.json");
+/** Session-bounded storage: the todo file lives beside the session file. */
+export function sessionTodoPath(sessionFile: string): string {
+  if (sessionFile.endsWith(".jsonl")) return sessionFile.replace(/\.jsonl$/, ".todo.json");
+  return `${sessionFile}.todo.json`; // defensive: never write over a non-session file
 }
 
 function empty(): TodoState {
   return { tasks: [], nextId: 1 };
+}
+
+let memoryState: TodoState | undefined;
+
+/** Load a session's todos: undefined file (ephemeral session) → in-memory state
+ *  retained across calls (reset via resetMemoryState at session boundaries);
+ *  otherwise read the session's file. */
+export function loadSessionState(file: string | undefined): TodoState {
+  return file === undefined ? (memoryState ?? empty()) : loadState(file);
+}
+
+/** Forget in-memory (ephemeral) todo state — called at session boundaries so
+ *  state never leaks across sessions. */
+export function resetMemoryState(): void {
+  memoryState = undefined;
 }
 
 function normalizeStatus(s: unknown): Task["status"] {
@@ -85,13 +102,35 @@ function saveState(path: string, state: TodoState): void {
 }
 
 export function applyAndSave(
-  path: string,
+  path: string | undefined,
   current: TodoState,
   op: TodoOp,
   params: { text?: string; id?: number },
 ): TodoResult {
   const result = applyOp(current, op, params);
+  if (path === undefined) {
+    // Ephemeral session: retain in memory for subsequent calls this session.
+    memoryState = result.state;
+    return result;
+  }
   // "list" is read-only — skip rewriting identical bytes (tmp+fsync+rename).
   if (!result.error && op !== "list") saveState(path, result.state);
   return result;
+}
+
+/** Copy one session's todo file to another (fork inheritance). No-op when the
+ *  source is missing or has no tasks (nothing worth inheriting). */
+export function copyState(from: string, to: string): void {
+  const state = loadState(from);
+  if (state.tasks.length === 0) return;
+  saveState(to, state);
+}
+
+/** Fork inheritance: copy the previous session's todos to the new session's
+ *  file unless the destination already has one (never overwrite). */
+export function inheritOnFork(previousSessionFile: string | undefined, destSessionFile: string): void {
+  if (previousSessionFile === undefined) return;
+  const dest = sessionTodoPath(destSessionFile);
+  if (existsSync(dest)) return;
+  copyState(sessionTodoPath(previousSessionFile), dest);
 }

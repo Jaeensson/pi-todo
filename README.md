@@ -1,13 +1,16 @@
 # pi-todo
 
-A human-facing, per-project todo tracker for the pi coding agent.
+A human-facing, per-session todo tracker for the pi coding agent.
 
 - **Tool:** `todo` — `add | start | done | list | clear`. The model creates one todo per
   step or plan task, marks `in_progress` before starting, and `done` when finished.
 - **Widget:** anchored above the editor, toggled with `/todos`; renders only when the
   list is non-empty. Markers: `○` pending · `▸` in_progress · `✓` completed (no emojis).
-- **Storage:** `<project>/.pi/todo.json` (atomic writes; survives restarts; tolerant of
-  missing/corrupt files).
+- **Storage:** session-bound — each pi session's list lives at
+  `~/.pi/agent/sessions/<cwd>/<…>.todo.json`, beside its session file (atomic writes;
+  survives restarts and resumes; tolerant of missing/corrupt files). Fork/clone
+  inherit the source session's todos; ephemeral sessions (`--no-session`) keep todos
+  in memory only.
 - **Commands:** `/todos` (toggle widget) · `/todos clear` (clear with confirmation).
 
 ## Install
