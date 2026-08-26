@@ -312,7 +312,7 @@ export function inheritOnFork(previousSessionFile: string | undefined, destSessi
 - [ ] **Step 4: Run the tests to verify they pass**
 
 Run: `npx vitest run test/store.test.ts`
-Expected: ALL PASS (12 tests).
+Expected: ALL PASS (all tests in the rewritten file — every test in Step 1's code block; the file contains 16 tests).
 
 - [ ] **Step 5: Commit**
 
