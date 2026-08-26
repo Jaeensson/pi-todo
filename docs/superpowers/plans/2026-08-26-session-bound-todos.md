@@ -312,7 +312,7 @@ export function inheritOnFork(previousSessionFile: string | undefined, destSessi
 - [ ] **Step 4: Run the tests to verify they pass**
 
 Run: `npx vitest run test/store.test.ts`
-Expected: ALL PASS (12 tests).
+Expected: ALL PASS (all tests in the rewritten file — every test in Step 1's code block; the file contains 16 tests).
 
 - [ ] **Step 5: Commit**
 
@@ -601,3 +601,8 @@ Read `docs/superpowers/specs/2026-08-26-session-bound-todos-design.md` and confi
 
 Run: `npm test` and `npm run typecheck`
 Expected: ALL PASS, typecheck clean. Working tree clean after the Task 3 commit (`git status --short` empty).
+---
+
+## Review note (approved deviation)
+
+Ephemeral sessions (no session file) must keep todos in memory **across tool calls** for the session lifetime (spec: "in memory for the process lifetime"). The original Task 1/2 code blocks discarded in-memory results between calls, breaking multi-step workflows in ephemeral mode — caught in Task 2 code review. Final implementation: `src/store.ts` holds a module-level `memoryState` (retained by `applyAndSave` for `undefined` paths, consulted by `loadSessionState(undefined)`, cleared by `resetMemoryState()` — called first in `session_start` and in `session_shutdown`); `test/store.test.ts` covers retention + reset; `index.ts` tool/command flow stays `applyAndSave(path, loadSessionState(path), ...)` with no special-casing.
