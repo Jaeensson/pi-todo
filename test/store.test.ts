@@ -32,6 +32,12 @@ describe("store", () => {
     expect(sessionTodoPath(join(dir, "x.jsonl"))).toBe(join(dir, "x.todo.json"));
   });
 
+  it("sessionTodoPath never returns its input (defensive .jsonl fallback)", () => {
+    expect(sessionTodoPath(join(dir, "weird.JSONL"))).toBe(join(dir, "weird.JSONL.todo.json"));
+    expect(sessionTodoPath(join(dir, "noext"))).toBe(join(dir, "noext.todo.json"));
+    expect(sessionTodoPath(join(dir, "x.jsonl"))).toBe(join(dir, "x.todo.json"));
+  });
+
   it("loadSessionState(undefined) returns empty state (ephemeral session)", () => {
     expect(loadSessionState(undefined)).toEqual(EMPTY_STATE);
   });

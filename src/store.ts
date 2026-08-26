@@ -24,7 +24,8 @@ interface TodoFile {
 
 /** Session-bounded storage: the todo file lives beside the session file. */
 export function sessionTodoPath(sessionFile: string): string {
-  return sessionFile.replace(/\.jsonl$/, ".todo.json");
+  if (sessionFile.endsWith(".jsonl")) return sessionFile.replace(/\.jsonl$/, ".todo.json");
+  return `${sessionFile}.todo.json`; // defensive: never write over a non-session file
 }
 
 function empty(): TodoState {
