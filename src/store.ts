@@ -12,7 +12,7 @@ import {
   unlinkSync,
   writeFileSync,
 } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname } from "node:path";
 
 import { applyOp, type Task, type TodoOp, type TodoResult, type TodoState } from "./core.js";
 
@@ -22,12 +22,18 @@ interface TodoFile {
   tasks: Task[];
 }
 
-export function storePathFor(cwd: string): string {
-  return join(cwd, ".pi", "todo.json");
+/** Session-bounded storage: the todo file lives beside the session file. */
+export function sessionTodoPath(sessionFile: string): string {
+  return sessionFile.replace(/\.jsonl$/, ".todo.json");
 }
 
 function empty(): TodoState {
   return { tasks: [], nextId: 1 };
+}
+
+/** Load a session's todos: undefined file (ephemeral session) → empty, in-memory. */
+export function loadSessionState(file: string | undefined): TodoState {
+  return file === undefined ? empty() : loadState(file);
 }
 
 function normalizeStatus(s: unknown): Task["status"] {
@@ -85,13 +91,31 @@ function saveState(path: string, state: TodoState): void {
 }
 
 export function applyAndSave(
-  path: string,
+  path: string | undefined,
   current: TodoState,
   op: TodoOp,
   params: { text?: string; id?: number },
 ): TodoResult {
   const result = applyOp(current, op, params);
   // "list" is read-only — skip rewriting identical bytes (tmp+fsync+rename).
-  if (!result.error && op !== "list") saveState(path, result.state);
+  // An undefined path means an ephemeral session — apply in memory, never write.
+  if (!result.error && op !== "list" && path !== undefined) saveState(path, result.state);
   return result;
+}
+
+/** Copy one session's todo file to another (fork inheritance). No-op when the
+ *  source is missing or has no tasks (nothing worth inheriting). */
+export function copyState(from: string, to: string): void {
+  const state = loadState(from);
+  if (state.tasks.length === 0) return;
+  saveState(to, state);
+}
+
+/** Fork inheritance: copy the previous session's todos to the new session's
+ *  file unless the destination already has one (never overwrite). */
+export function inheritOnFork(previousSessionFile: string | undefined, destSessionFile: string): void {
+  if (previousSessionFile === undefined) return;
+  const dest = sessionTodoPath(destSessionFile);
+  if (existsSync(dest)) return;
+  copyState(sessionTodoPath(previousSessionFile), dest);
 }
