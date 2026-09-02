@@ -27,8 +27,8 @@ function colorMarker(t: Task, theme: TodoTheme): string {
 }
 
 // Index of the window's first line: 0, or — when the list overflows — the index of the
-// most recently completed task (max updatedAt, tie-broken by higher id, since ids are
-// assigned in completion order). Returns 0 when nothing is completed or nothing overflows.
+// most recently completed task (max updatedAt, tie-broken by higher id, i.e. the
+// later-created task). Returns 0 when nothing is completed or nothing overflows.
 function startIndex(ordered: Task[], budget: number): number {
   if (ordered.length <= budget) return 0;
   let pin = -1;
@@ -50,15 +50,21 @@ export function renderWidgetLines(state: TodoState, theme: TodoTheme, width: num
   const header = theme.fg(active > 0 ? "accent" : "dim", headerText);
 
   const lines: string[] = [header];
-  // Reserve one line for the header and one for the "+N more" overflow indicator so the
-  // whole widget stays within maxLines (bounded render); N counts tasks not shown.
-  const budget = Math.max(0, maxLines - 2);
+  // Bounded render: header + up to two overflow indicator lines + tasks. The top
+  // indicator ("↑ N more") is shown when the pin hides tasks above the window; the
+  // bottom one ("↓ N more") when tasks remain below it. The top line is only
+  // reserved when the pin actually engages, so lists that overflow below keep the
+  // full task budget of maxLines - 2.
   const ordered = [...state.tasks].sort((a, b) => a.id - b.id);
-  const start = startIndex(ordered, budget);
+  const overflow = ordered.length > Math.max(0, maxLines - 2);
+  const start = overflow ? startIndex(ordered, Math.max(0, maxLines - 3)) : 0;
+  const budget = Math.max(0, maxLines - (start > 0 ? 3 : 2));
   const visible = ordered.slice(start, start + budget);
-  const hidden = ordered.length - visible.length;
+  const above = start; // tasks hidden before the window
+  const below = ordered.length - (start + visible.length); // tasks remaining after the window
+  if (above > 0 && lines.length < maxLines) lines.push(`↑ ${above} more`);
   for (const t of visible) lines.push(`${colorMarker(t, theme)} #${t.id} ${t.text}`);
-  if (hidden > 0 && lines.length < maxLines) lines.push(`+${hidden} more`);
+  if (below > 0 && lines.length < maxLines) lines.push(`↓ ${below} more`);
   // pi-tui validates that every rendered line fits the viewport and throws otherwise
   // (crashing pi), so clip each line to the terminal width it was rendered for.
   // truncateToWidth is ANSI-aware and appends "..." when it clips.

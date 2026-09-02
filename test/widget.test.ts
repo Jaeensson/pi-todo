@@ -38,7 +38,7 @@ describe("renderWidgetLines", () => {
     ]);
   });
 
-  it("honors maxLines and reports overflow with +N more", () => {
+  it("honors maxLines and reports below-overflow with ↓ N more", () => {
     const state: TodoState = {
       tasks: Array.from({ length: 12 }, (_, i) => task(i + 1, `t${i + 1}`, "pending")),
       nextId: 13,
@@ -46,7 +46,8 @@ describe("renderWidgetLines", () => {
     const lines = renderWidgetLines(state, EMPTY_THEME, 100, WIDGET_MAX_LINES);
     expect(lines.length).toBe(10);
     expect(lines[1]).toBe("○ #1 t1");
-    expect(lines[9]).toBe("+4 more");
+    expect(lines[8]).toBe("○ #8 t8");
+    expect(lines[9]).toBe("↓ 4 more");
   });
 
   it("stays within one line when maxLines=1 (drops +N more)", () => {
@@ -65,9 +66,10 @@ describe("renderWidgetLines", () => {
     const state: TodoState = { tasks, nextId: 13 };
     const lines = renderWidgetLines(state, EMPTY_THEME, 100, WIDGET_MAX_LINES);
     expect(lines.length).toBe(10);
-    expect(lines[1]).toBe("✓ #4 t4");
-    expect(lines[2]).toBe("○ #5 t5");
-    expect(lines[9]).toBe("+4 more"); // #1-#3 hidden above pin, #12 hidden below
+    expect(lines[1]).toBe("↑ 3 more"); // #1-#3 hidden above the window
+    expect(lines[2]).toBe("✓ #4 t4");
+    expect(lines[3]).toBe("○ #5 t5");
+    expect(lines[9]).toBe("↓ 2 more"); // #11-#12 remain below the window
   });
 
   it("pins the latest of several completions by updatedAt", () => {
@@ -76,7 +78,8 @@ describe("renderWidgetLines", () => {
     tasks[7] = { ...tasks[7]!, status: "completed", updatedAt: 200 };  // #8 — more recent
     const state: TodoState = { tasks, nextId: 13 };
     const lines = renderWidgetLines(state, EMPTY_THEME, 100, WIDGET_MAX_LINES);
-    expect(lines[1]).toBe("✓ #8 t8");
+    expect(lines[1]).toBe("↑ 7 more"); // #1-#7 hidden above the window
+    expect(lines[2]).toBe("✓ #8 t8");
   });
 
   it("breaks updatedAt ties by higher id", () => {
@@ -85,19 +88,65 @@ describe("renderWidgetLines", () => {
     tasks[7] = { ...tasks[7]!, status: "completed" }; // #8, updatedAt 0
     const state: TodoState = { tasks, nextId: 13 };
     const lines = renderWidgetLines(state, EMPTY_THEME, 100, WIDGET_MAX_LINES);
-    expect(lines[1]).toBe("✓ #8 t8");
+    expect(lines[1]).toBe("↑ 7 more");
+    expect(lines[2]).toBe("✓ #8 t8");
   });
 
-  it("counts hidden-above-pin tasks in +N more when the pin sits near the end", () => {
+  it("labels hidden-above and remaining-below counts when the pin sits mid-list", () => {
+    const tasks = Array.from({ length: 15 }, (_, i) => task(i + 1, `t${i + 1}`, "pending"));
+    tasks[2] = { ...tasks[2]!, status: "completed", updatedAt: 100 }; // #3 — window pins here
+    const state: TodoState = { tasks, nextId: 16 };
+    const lines = renderWidgetLines(state, EMPTY_THEME, 100, WIDGET_MAX_LINES);
+    expect(lines[1]).toBe("↑ 2 more"); // #1-#2 hidden above the window
+    expect(lines[2]).toBe("✓ #3 t3");
+    expect(lines[9]).toBe("↓ 6 more"); // #10-#15 remain below the window
+  });
+
+  it("shows only the top label when nothing remains below the window", () => {
     const tasks = Array.from({ length: 12 }, (_, i) => task(i + 1, `t${i + 1}`, "pending"));
     tasks[10] = { ...tasks[10]!, status: "completed", updatedAt: 100 }; // #11
     const state: TodoState = { tasks, nextId: 13 };
     const lines = renderWidgetLines(state, EMPTY_THEME, 100, WIDGET_MAX_LINES);
     expect(lines).toEqual([
       "Todos 1/12",
+      "↑ 10 more",
       "✓ #11 t11",
       "○ #12 t12",
-      "+10 more",
+    ]);
+  });
+
+  it("stays bounded at maxLines=2 when pinned (top label only, no task rows)", () => {
+    const tasks = Array.from({ length: 5 }, (_, i) => task(i + 1, `t${i + 1}`, "pending"));
+    tasks[2] = { ...tasks[2]!, status: "completed", updatedAt: 100 }; // #3
+    const state: TodoState = { tasks, nextId: 6 };
+    const lines = renderWidgetLines(state, EMPTY_THEME, 100, 2);
+    expect(lines).toEqual([
+      "Todos 1/5",
+      "↑ 2 more",
+    ]);
+  });
+
+  it("shows only the bottom label at maxLines=2 when unpinned (no task rows)", () => {
+    const state: TodoState = {
+      tasks: Array.from({ length: 5 }, (_, i) => task(i + 1, `t${i + 1}`, "pending")),
+      nextId: 6,
+    };
+    const lines = renderWidgetLines(state, EMPTY_THEME, 100, 2);
+    expect(lines).toEqual([
+      "Todos 0/5",
+      "↓ 5 more",
+    ]);
+  });
+
+  it("shows both labels with no task rows at maxLines=3 when pinned", () => {
+    const tasks = Array.from({ length: 5 }, (_, i) => task(i + 1, `t${i + 1}`, "pending"));
+    tasks[3] = { ...tasks[3]!, status: "completed", updatedAt: 100 }; // #4
+    const state: TodoState = { tasks, nextId: 6 };
+    const lines = renderWidgetLines(state, EMPTY_THEME, 100, 3);
+    expect(lines).toEqual([
+      "Todos 1/5",
+      "↑ 3 more",
+      "↓ 2 more",
     ]);
   });
 });
