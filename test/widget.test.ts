@@ -78,7 +78,7 @@ describe("renderWidgetLines", () => {
     tasks[7] = { ...tasks[7]!, status: "completed", updatedAt: 200 };  // #8 — more recent
     const state: TodoState = { tasks, nextId: 13 };
     const lines = renderWidgetLines(state, EMPTY_THEME, 100, WIDGET_MAX_LINES);
-    expect(lines[1]).toBe("↑ 7 more"); // #1-#7 hidden above the window
+    expect(lines[1]).toBe("↑ 6 more"); // #1-#7 hidden above the window; #3 is completed and excluded
     expect(lines[2]).toBe("✓ #8 t8");
   });
 
@@ -88,8 +88,51 @@ describe("renderWidgetLines", () => {
     tasks[7] = { ...tasks[7]!, status: "completed" }; // #8, updatedAt 0
     const state: TodoState = { tasks, nextId: 13 };
     const lines = renderWidgetLines(state, EMPTY_THEME, 100, WIDGET_MAX_LINES);
-    expect(lines[1]).toBe("↑ 7 more");
+    expect(lines[1]).toBe("↑ 6 more"); // #1-#7 hidden above the window; #3 is completed and excluded
     expect(lines[2]).toBe("✓ #8 t8");
+  });
+
+  it("excludes completed tasks hidden above the pin from ↑ N more", () => {
+    const tasks = Array.from({ length: 12 }, (_, i) => task(i + 1, `t${i + 1}`, "pending"));
+    tasks[2] = { ...tasks[2]!, status: "completed", updatedAt: 100 };  // #3 — completed, hidden above the pin
+    tasks[7] = { ...tasks[7]!, status: "completed", updatedAt: 200 };  // #8 — more recent, pins the window
+    const state: TodoState = { tasks, nextId: 13 };
+    const lines = renderWidgetLines(state, EMPTY_THEME, 100, WIDGET_MAX_LINES);
+    expect(lines[1]).toBe("↑ 6 more"); // #1-#7 hidden above the window; #3 is completed and excluded
+    expect(lines[2]).toBe("✓ #8 t8");
+  });
+
+  it("excludes completed tasks hidden below the window from ↓ N more", () => {
+    const tasks = Array.from({ length: 12 }, (_, i) => task(i + 1, `t${i + 1}`, "pending"));
+    tasks[2] = { ...tasks[2]!, status: "completed", updatedAt: 200 };  // #3 — more recent, pins the window
+    tasks[10] = { ...tasks[10]!, status: "completed", updatedAt: 100 }; // #11 — hidden below the window
+    const state: TodoState = { tasks, nextId: 13 };
+    const lines = renderWidgetLines(state, EMPTY_THEME, 100, WIDGET_MAX_LINES);
+    expect(lines[1]).toBe("↑ 2 more"); // #1-#2 hidden above the window, both pending
+    expect(lines[2]).toBe("✓ #3 t3");
+    expect(lines[9]).toBe("↓ 2 more"); // #10 and #12 remain below; #11 is completed and excluded
+  });
+
+  it("omits the top label when every hidden-above task is completed", () => {
+    const tasks = Array.from({ length: 12 }, (_, i) => task(i + 1, `t${i + 1}`, "pending"));
+    tasks[0] = { ...tasks[0]!, status: "completed", updatedAt: 100 }; // #1 — the only task hidden above
+    tasks[1] = { ...tasks[1]!, status: "completed", updatedAt: 200 }; // #2 — more recent, pins the window
+    const state: TodoState = { tasks, nextId: 13 };
+    const lines = renderWidgetLines(state, EMPTY_THEME, 100, WIDGET_MAX_LINES);
+    expect(lines[1]).toBe("✓ #2 t2"); // no "↑ 0 more" label above it
+    expect(lines.some((l) => l.startsWith("↑ "))).toBe(false);
+    expect(lines[lines.length - 1]).toBe("↓ 4 more"); // #9-#12 remain below, all pending
+  });
+
+  it("omits the bottom label when every remaining-below task is completed", () => {
+    const tasks = Array.from({ length: 10 }, (_, i) => task(i + 1, `t${i + 1}`, "pending"));
+    tasks[2] = { ...tasks[2]!, status: "completed", updatedAt: 200 }; // #3 — more recent, pins the window
+    tasks[9] = { ...tasks[9]!, status: "completed", updatedAt: 100 }; // #10 — the only task hidden below
+    const state: TodoState = { tasks, nextId: 11 };
+    const lines = renderWidgetLines(state, EMPTY_THEME, 100, WIDGET_MAX_LINES);
+    expect(lines[1]).toBe("↑ 2 more"); // #1-#2 hidden above the window, both pending
+    expect(lines[lines.length - 1]).toBe("○ #9 t9"); // no "↓ 0 more" label below it
+    expect(lines.some((l) => l.startsWith("↓ "))).toBe(false);
   });
 
   it("labels hidden-above and remaining-below counts when the pin sits mid-list", () => {
@@ -146,7 +189,7 @@ describe("renderWidgetLines", () => {
     expect(lines).toEqual([
       "Todos 1/5",
       "↑ 3 more",
-      "↓ 2 more",
+      "↓ 1 more", // #4 is completed and excluded from the below count
     ]);
   });
 });

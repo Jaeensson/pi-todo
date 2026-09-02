@@ -60,8 +60,8 @@ export function renderWidgetLines(state: TodoState, theme: TodoTheme, width: num
   const start = overflow ? startIndex(ordered, Math.max(0, maxLines - 3)) : 0;
   const budget = Math.max(0, maxLines - (start > 0 ? 3 : 2));
   const visible = ordered.slice(start, start + budget);
-  const above = start; // tasks hidden before the window
-  const below = ordered.length - (start + visible.length); // tasks remaining after the window
+  const above = ordered.slice(0, start).filter((t) => t.status !== "completed").length; // uncompleted tasks hidden before the window
+  const below = ordered.slice(start + visible.length).filter((t) => t.status !== "completed").length; // uncompleted tasks remaining after the window
   if (above > 0 && lines.length < maxLines) lines.push(`↑ ${above} more`);
   for (const t of visible) lines.push(`${colorMarker(t, theme)} #${t.id} ${t.text}`);
   if (below > 0 && lines.length < maxLines) lines.push(`↓ ${below} more`);
