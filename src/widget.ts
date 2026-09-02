@@ -1,6 +1,7 @@
 // src/widget.ts — widget controller: fixed aboveEditor anchor, toggle, bounded ASCII-safe render.
 // Depends on pi only through narrow structural interfaces (TodoUI/TodoTheme/WidgetHandle).
 
+import { truncateToWidth } from "@earendil-works/pi-tui";
 import { markerFor, type Task, type TodoState } from "./core.js";
 
 export interface TodoUI {
@@ -42,7 +43,7 @@ function startIndex(ordered: Task[], budget: number): number {
   return pin === -1 ? 0 : pin;
 }
 
-export function renderWidgetLines(state: TodoState, theme: TodoTheme, maxLines: number = WIDGET_MAX_LINES): string[] {
+export function renderWidgetLines(state: TodoState, theme: TodoTheme, width: number, maxLines: number = WIDGET_MAX_LINES): string[] {
   const done = state.tasks.filter((t) => t.status === "completed").length;
   const active = state.tasks.filter((t) => t.status === "in_progress").length;
   const headerText = `Todos ${done}/${state.tasks.length}` + (active > 0 ? `  (${active} in progress)` : "");
@@ -58,11 +59,14 @@ export function renderWidgetLines(state: TodoState, theme: TodoTheme, maxLines: 
   const hidden = ordered.length - visible.length;
   for (const t of visible) lines.push(`${colorMarker(t, theme)} #${t.id} ${t.text}`);
   if (hidden > 0 && lines.length < maxLines) lines.push(`+${hidden} more`);
-  return lines;
+  // pi-tui validates that every rendered line fits the viewport and throws otherwise
+  // (crashing pi), so clip each line to the terminal width it was rendered for.
+  // truncateToWidth is ANSI-aware and appends "..." when it clips.
+  return lines.map((line) => truncateToWidth(line, Math.max(1, width)));
 }
 
 interface RegisteredComponent {
-  render(): string[];
+  render(width: number): string[];
   invalidate(): void;
 }
 
@@ -113,7 +117,7 @@ export class TodoWidget {
         (handle: WidgetHandle, theme: TodoTheme): RegisteredComponent => {
           this.tui = handle;
           return {
-            render: () => renderWidgetLines(this.state, theme),
+            render: (width: number) => renderWidgetLines(this.state, theme, width),
             invalidate: () => {
               this.registered = false;
               this.tui = undefined;

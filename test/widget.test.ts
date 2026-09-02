@@ -1,3 +1,4 @@
+import { stripTerminalSequences, visibleWidth } from "@earendil-works/pi-tui";
 import { describe, expect, it } from "vitest";
 import { EMPTY_STATE, type Task, type TodoState } from "../src/core.js";
 import { TodoWidget, renderWidgetLines, WIDGET_KEY, WIDGET_MAX_LINES, type TodoTheme, type TodoUI, type WidgetHandle } from "../src/widget.js";
@@ -28,7 +29,7 @@ describe("renderWidgetLines", () => {
       tasks: [task(1, "A", "in_progress"), task(2, "B", "completed"), task(3, "C", "pending")],
       nextId: 4,
     };
-    const lines = renderWidgetLines(state, fakeTheme);
+    const lines = renderWidgetLines(state, fakeTheme, 100);
     expect(lines).toEqual([
       "<accent>Todos 1/3  (1 in progress)</accent>",
       "<accent>▸</accent> #1 A",
@@ -42,7 +43,7 @@ describe("renderWidgetLines", () => {
       tasks: Array.from({ length: 12 }, (_, i) => task(i + 1, `t${i + 1}`, "pending")),
       nextId: 13,
     };
-    const lines = renderWidgetLines(state, EMPTY_THEME, WIDGET_MAX_LINES);
+    const lines = renderWidgetLines(state, EMPTY_THEME, 100, WIDGET_MAX_LINES);
     expect(lines.length).toBe(10);
     expect(lines[1]).toBe("○ #1 t1");
     expect(lines[9]).toBe("+4 more");
@@ -53,7 +54,7 @@ describe("renderWidgetLines", () => {
       tasks: [task(1, "A", "pending")],
       nextId: 2,
     };
-    const lines = renderWidgetLines(state, EMPTY_THEME, 1);
+    const lines = renderWidgetLines(state, EMPTY_THEME, 100, 1);
     expect(lines.length).toBe(1);
     expect(lines[0]).toBe("Todos 0/1");
   });
@@ -62,7 +63,7 @@ describe("renderWidgetLines", () => {
     const tasks = Array.from({ length: 12 }, (_, i) => task(i + 1, `t${i + 1}`, "pending"));
     tasks[3] = { ...tasks[3]!, status: "completed", updatedAt: 100 }; // #4 completed
     const state: TodoState = { tasks, nextId: 13 };
-    const lines = renderWidgetLines(state, EMPTY_THEME, WIDGET_MAX_LINES);
+    const lines = renderWidgetLines(state, EMPTY_THEME, 100, WIDGET_MAX_LINES);
     expect(lines.length).toBe(10);
     expect(lines[1]).toBe("✓ #4 t4");
     expect(lines[2]).toBe("○ #5 t5");
@@ -74,7 +75,7 @@ describe("renderWidgetLines", () => {
     tasks[2] = { ...tasks[2]!, status: "completed", updatedAt: 100 };  // #3
     tasks[7] = { ...tasks[7]!, status: "completed", updatedAt: 200 };  // #8 — more recent
     const state: TodoState = { tasks, nextId: 13 };
-    const lines = renderWidgetLines(state, EMPTY_THEME, WIDGET_MAX_LINES);
+    const lines = renderWidgetLines(state, EMPTY_THEME, 100, WIDGET_MAX_LINES);
     expect(lines[1]).toBe("✓ #8 t8");
   });
 
@@ -83,7 +84,7 @@ describe("renderWidgetLines", () => {
     tasks[2] = { ...tasks[2]!, status: "completed" }; // #3, updatedAt 0
     tasks[7] = { ...tasks[7]!, status: "completed" }; // #8, updatedAt 0
     const state: TodoState = { tasks, nextId: 13 };
-    const lines = renderWidgetLines(state, EMPTY_THEME, WIDGET_MAX_LINES);
+    const lines = renderWidgetLines(state, EMPTY_THEME, 100, WIDGET_MAX_LINES);
     expect(lines[1]).toBe("✓ #8 t8");
   });
 
@@ -91,13 +92,64 @@ describe("renderWidgetLines", () => {
     const tasks = Array.from({ length: 12 }, (_, i) => task(i + 1, `t${i + 1}`, "pending"));
     tasks[10] = { ...tasks[10]!, status: "completed", updatedAt: 100 }; // #11
     const state: TodoState = { tasks, nextId: 13 };
-    const lines = renderWidgetLines(state, EMPTY_THEME, WIDGET_MAX_LINES);
+    const lines = renderWidgetLines(state, EMPTY_THEME, 100, WIDGET_MAX_LINES);
     expect(lines).toEqual([
       "Todos 1/12",
       "✓ #11 t11",
       "○ #12 t12",
       "+10 more",
     ]);
+  });
+});
+
+describe("renderWidgetLines width truncation", () => {
+  const longText =
+    "Research Swedish seed retailers (discovery + automation surfaces: platform, sitemaps, JSON feeds, EAN availability)";
+
+  it("truncates task lines exceeding the terminal width (regression: pi crash at narrow terminals)", () => {
+    const state: TodoState = { tasks: [task(1, longText, "pending")], nextId: 2 };
+    const lines = renderWidgetLines(state, EMPTY_THEME, 60);
+    expect(lines.length).toBe(2);
+    for (const line of lines) expect(visibleWidth(line)).toBeLessThanOrEqual(60);
+    expect(lines[1]!.startsWith("○ #1 ")).toBe(true);
+    expect(stripTerminalSequences(lines[1]!).endsWith("...")).toBe(true);
+  });
+
+  it("truncates ANSI-styled lines by visible width, not byte length", () => {
+    const ansiTheme: TodoTheme = { fg: (_color, s) => `\x1B[32m${s}\x1B[39m` };
+    const state: TodoState = { tasks: [task(1, longText, "in_progress")], nextId: 2 };
+    const lines = renderWidgetLines(state, ansiTheme, 50);
+    for (const line of lines) expect(visibleWidth(line)).toBeLessThanOrEqual(50);
+    expect(lines[1]).toContain("#1");
+  });
+
+  it("truncates the header when the width is tiny", () => {
+    const state: TodoState = {
+      tasks: [task(1, "A", "in_progress"), task(2, "B", "pending")],
+      nextId: 3,
+    };
+    const lines = renderWidgetLines(state, EMPTY_THEME, 5);
+    for (const line of lines) expect(visibleWidth(line)).toBeLessThanOrEqual(5);
+    expect(stripTerminalSequences(lines[0]!)).toBe("To...");
+  });
+
+  it("leaves lines that fit untouched", () => {
+    const state: TodoState = { tasks: [task(1, "A", "pending")], nextId: 2 };
+    const lines = renderWidgetLines(state, EMPTY_THEME, 100);
+    expect(lines[1]).toBe("○ #1 A");
+  });
+
+  it("forwards the terminal width from the registered component's render", () => {
+    const ui = recordingUI();
+    const w = new TodoWidget();
+    w.attach(ui);
+    w.setState({ tasks: [task(1, longText, "pending")], nextId: 2 });
+    const factory = ui.calls[0]?.[1] as (handle: WidgetHandle, theme: TodoTheme) => {
+      render(width: number): string[];
+    };
+    const component = factory({ requestRender: () => {} }, EMPTY_THEME);
+    for (const line of component.render(30)) expect(visibleWidth(line)).toBeLessThanOrEqual(30);
+    for (const line of component.render(200)) expect(visibleWidth(line)).toBeLessThanOrEqual(200);
   });
 });
 
@@ -112,9 +164,9 @@ describe("TodoWidget", () => {
     expect(ui.calls[0]?.[0]).toBe(WIDGET_KEY);
     let renderedCount = 0;
     const handle: WidgetHandle = { requestRender: () => { renderedCount++; } };
-    const factory = ui.calls[0]?.[1] as (handle: WidgetHandle, theme: TodoTheme) => { render(): string[] };
+    const factory = ui.calls[0]?.[1] as (handle: WidgetHandle, theme: TodoTheme) => { render(width: number): string[] };
     const component = factory(handle, EMPTY_THEME);
-    expect(component.render()[0]).toBe("Todos 0/1");
+    expect(component.render(100)[0]).toBe("Todos 0/1");
 
     w.setState({ tasks: [task(1, "A", "completed")], nextId: 2 });
     expect(renderedCount).toBe(1);
